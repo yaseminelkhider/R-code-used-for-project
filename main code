@@ -1,0 +1,953 @@
+library(readr)
+library(dplyr)
+library(ggplot2)
+library(tidyverse)
+library(patchwork)
+library(aplpack)
+library(gridExtra)
+library(effsize)
+
+
+data <- read_csv("diabetes_prediction_dataset.csv")
+summary_stats <- data %>%
+  summarise(
+    mean_age = mean(age),
+    median_age = median(age),
+    sd_age = sd(age),
+    mean_bmi = mean(bmi),
+    median_bmi = median(bmi),
+    sd_bmi = sd(bmi),
+    mean_glucose = mean(blood_glucose_level),
+    median_glucose = median(blood_glucose_level),
+    sd_glucose =  sd(blood_glucose_level),
+    mean_hba1c = mean(HbA1c_level),
+    median_hba1c = median(HbA1c_level),
+    sd_hba1c = sd(HbA1c_level)
+  )
+View(summary_stats)
+
+
+#2-  Frequency Distribution 
+#Finding ranges
+range_age <- range(data$age, na.rm = TRUE)
+range_bmi <- range(data$bmi, na.rm = TRUE )
+range_HbA1c_level <- range(data$HbA1c_level, na.rm = TRUE )
+range_blood_glucose <- range(data$blood_glucose, na.rm = TRUE )
+print(range_age)
+print(range_bmi)
+print(range_HbA1c_level)
+print(range_blood_glucose)
+
+no_of_rows <- nrow(data)
+print(no_of_rows)
+#class_width
+class_width_age <- ceiling(range_age/no_of_rows)
+class_width_bmi <- ceiling(range_bmi/no_of_rows)
+class_width_HbA1c_level <- ceiling(range_HbA1c_level/no_of_rows)
+class_width_blood_glucose <- ceiling(range_blood_glucose/no_of_rows)
+print(class_width_age)
+print(class_width_bmi)
+print(class_width_HbA1c_level)
+print(class_width_blood_glucose)
+#Class Limits 
+class_limit_age <- seq(from=floor(range_age[1]), to=ceiling(range_age[2]), by=class_width_age)
+class_limit_bmi <- seq(from=floor(range_bmi[1]), to=ceiling(range_bmi[2]),by=class_width_bmi)
+class_limit_HbA1c_level <- seq(from=floor(range_HbA1c_level[1]), to=ceiling(range_HbA1c_level[2]),class_width_HbA1c_level)
+class_limit_blood_glucose <- seq(from=floor(range_blood_glucose[1]), to=ceiling(range_blood_glucose[2]),class_width_blood_glucose)
+print(class_limit_age)
+print(class_limit_bmi)
+print(class_limit_HbA1c_level)
+print(class_limit_blood_glucose)
+
+#class boundaries
+boundary_age <- seq(from=floor(range_age[1]) - 0.5, 
+                    to=ceiling(range_age[2]) + 0.5, 
+                    by=class_width_age)
+boundary_bmi <- seq(from=floor(range_bmi[1]) - 0.5, 
+                    to=ceiling(range_bmi[2]) + 0.5, 
+                    by=class_width_bmi)
+boundary_HbA1c_level <- seq(from=floor(range_HbA1c_level[1]) - 0.5, 
+                            to=ceiling(range_HbA1c_level[2]) + 0.5, 
+                            by=class_width_HbA1c_level)
+boundary_blood_glucose <- seq(from=floor(range_blood_glucose[1]) - 0.5, 
+                              to=ceiling(range_blood_glucose[2]) + 0.5, 
+                              by=class_width_blood_glucose)
+print(boundary_age)
+print(boundary_bmi)
+print(boundary_HbA1c_level)
+print(boundary_blood_glucose)
+
+library(aplpack)
+install.packages("aplpack")
+library(aplpack)
+library(ggplot2)
+library(dplyr)
+library(tidyr)
+
+#histogram for the ranges of the continous variables
+data$age_range <- cut(data$age, breaks = boundary_age, right = FALSE, include.lowest = TRUE)
+data$bmi_range <- cut(data$bmi, breaks = boundary_bmi, right = FALSE, include.lowest = TRUE)
+data$hba1c_range <- cut(data$HbA1c_level, breaks = boundary_HbA1c_level, right = FALSE, include.lowest = TRUE)
+data$glucose_range <- cut(data$blood_glucose_level, breaks = boundary_blood_glucose, right = FALSE, include.lowest = TRUE)
+range_data <- data %>%
+  select(age_range, bmi_range, hba1c_range, glucose_range) %>%
+  pivot_longer(cols = everything(), names_to = "Variable", values_to = "Range")
+range_counts <- range_data %>%
+  group_by(Variable, Range) %>%
+  summarise(Frequency = n(), .groups = "drop")
+ggplot(range_counts, aes(x = Range, y = Frequency, fill = Variable)) +
+  geom_bar(stat = "identity", color = "black") +
+  facet_wrap(~ Variable, scales = "free_x") +
+  labs(title = "Histogram using Custom Ranges",
+       x = "Range",
+       y = "Frequency") +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+
+
+
+# Ogive for class limits 
+library(ggplot2)
+library(dplyr)
+prepare_ogive_data <- function(data, variable, breaks) {
+  cuts <- cut(data[[variable]], breaks = breaks, right = FALSE, include.lowest = TRUE)
+  freq <- table(cuts)
+  upper_limits <- breaks[-1]  
+  cumulative <- cumsum(freq)
+  data.frame(
+    Upper_Limit = upper_limits,
+    Cumulative = cumulative,
+    Variable = variable
+  )
+}
+age_ogive <- prepare_ogive_data(data, "age", boundary_age)
+bmi_ogive <- prepare_ogive_data(data, "bmi", boundary_bmi)
+hba1c_level_ogive <- prepare_ogive_data(data, "HbA1c_level", boundary_HbA1c_level)
+blood_glucose_ogive <- prepare_ogive_data(data, "blood_glucose_level", boundary_blood_glucose)
+ogive_data <- bind_rows(age_ogive, bmi_ogive, hba1c_ogive, glucose_ogive)
+ggplot(ogive_data, aes(x = Upper_Limit, y = Cumulative, color = Variable)) +
+  geom_step(direction = "hv", linewidth = 1) +  # Step plot for ogive
+  geom_point() +
+  labs(
+    title = "Ogive (Cumulative Frequency Graph)",
+    x = "Upper Class Limits",
+    y = "Cumulative Frequency"
+  ) +
+  theme_minimal() +
+  theme(legend.position = "top")
+
+#frequency polygon for class boundaries
+prepare_freqpoly_data <- function(data, variable, breaks) {
+  cuts <- cut(data[[variable]], breaks = breaks, right = FALSE, include.lowest = TRUE)
+  freq <- as.data.frame(table(cuts))
+  extract_midpoint <- function(range_str) {
+    numbers <- as.numeric(unlist(regmatches(range_str, gregexpr("[0-9.]+", range_str))))
+    mean(numbers)
+  }
+  midpoints <- sapply(as.character(freq$cuts), extract_midpoint)
+  data.frame(
+    Midpoint = midpoints,
+    Frequency = freq$Freq,
+    Variable = variable
+  )
+}
+age_freqpoly <- prepare_freqpoly_data(data, "age", boundary_age)
+bmi_freqpoly <- prepare_freqpoly_data(data, "bmi", boundary_bmi)
+hba1c_freqpoly <- prepare_freqpoly_data(data, "HbA1c_level", boundary_HbA1c_level)
+glucose_freqpoly <- prepare_freqpoly_data(data, "blood_glucose_level", boundary_blood_glucose)
+# Combine and plot
+freqpoly_data <- bind_rows(age_freqpoly, bmi_freqpoly, hba1c_freqpoly, glucose_freqpoly)
+ggplot(freqpoly_data, aes(x = Midpoint, y = Frequency, color = Variable)) +
+  geom_line(linewidth = 1) +
+  geom_point(size = 3) +
+  labs(title = "Frequency Polygons", x = "Class Midpoints", y = "Frequency") +
+  theme_minimal()
+
+
+# histograms for class widths 
+install.packages("gridExtra")
+library(gridExtra)
+
+age_hist <- ggplot(data, aes(x = age)) +
+  geom_histogram(breaks = boundary_age, 
+                 fill = "yellow", color = "black", alpha = 0.7) +
+  labs(title = "Age Distribution", 
+       x = "Age", 
+       y = "Frequency") +
+  theme_minimal()
+
+bmi_hist <- ggplot(data, aes(x = bmi)) +
+  geom_histogram(breaks = boundary_bmi, fill = "orange", color = "black", alpha = 0.7) +
+  labs(title = "BMI Distribution", x = "BMI", y = "Frequency") +
+  theme_minimal()
+
+hba1c_level_hist <- ggplot(data, aes(x = HbA1c_level)) +
+  geom_histogram(breaks = boundary_HbA1c_level, fill = "darkgreen",color = "black", alpha = 0.7) +
+  labs(title = "HbA1c Level Distribution", x = "HbA1c Level", y = "Frequency") +
+  theme_minimal()
+
+blood_glucose_hist <- ggplot(data, aes(x = blood_glucose_level)) +
+  geom_histogram(breaks = boundary_blood_glucose, fill = "red", color = "black", alpha = 0.7) +
+  labs(title = "Blood Glucose Distribution", x = "Blood Glucose", y = "Frequency") +
+  theme_minimal()
+
+grid.arrange(age_hist, bmi_hist, hba1c_hist, glucose_hist, 
+             ncol = 2,
+             top = "Distributions Using Custom Class Widths")
+
+
+
+# 3.VISUALIZATION
+data <- data %>%
+  mutate(age_group = cut(age, breaks = c(0, 30, 45, 60, 100),
+                         labels = c("<30", "30-45", "45-60", "60+")),
+         diabetes = as.factor(diabetes))
+ggplot(data, aes(x = age_group, fill = diabetes)) +
+  geom_bar(position = "fill") +
+  labs(title = "Diabetes Frequency By Age Group", y = "Proportion") +
+  scale_y_continuous(labels = scales::percent_format()) +  # optional: show % instead of 0–1
+  theme_minimal()
+ggplot(data , aes(x = diabetes , y = bmi, fill = diabetes)) +
+  geom_boxplot() +
+  labs(title = "BMI Distribution By Diabetes status")
+ggplot(data, aes(x=HbA1c_level, y=blood_glucose_level, color=diabetes)) +
+  geom_point(alpha=0.5 , size = 1) +
+  labs(title="Blood Glucose vs HbA1c by Diabetes Status")
+
+
+
+
+
+#part4: central tendency measures
+get_mode <- function(x) {
+  ux <- unique(x)
+  ux[which.max(tabulate(match(x, ux)))]
+}
+central_tendency <- function(x) {
+  c(
+    Mean = mean(x),
+    Median = median(x),
+    Mode = get_mode(x),
+    Midrange = (min(x) + max(x)) / 2
+  )
+}
+variables <- c("age", "bmi", "blood_glucose_level", "HbA1c_level")
+central_table <- sapply(variables, function(var) {
+  central_tendency(data[[var]])
+})
+central_table <- as.data.frame(t(central_table))
+print(central_table)
+#MEASURES OF VARIATION
+measures_variation <- function(x) {
+  c( 
+    range = max(x) - min(x),
+    variance = var(x),
+    std_var = sd(x),
+    coeff_of_var = sd(x) / mean(x)
+  )
+}
+variables <- c("age", "bmi", "blood_glucose_level", "HbA1c_level")
+
+variation_table <- sapply(variables, function(var) {
+  measures_variation(data[[var]])
+})
+variation_table <- as.data.frame(t(variation_table))
+print(variation_table)
+#meaures of position
+measures_position <- function(x) {
+  z_scores <- (x - mean(x) / sd(x))
+  percentiles <- quantile(x , probs = c(0.25, 0.5, 0.75))
+  IQR_value <- IQR(x)
+  lower_bound <- percentiles[1] - 1.5 * IQR_value
+  upper_bound <- percentiles[3] + 1.5 * IQR_value
+  outliers <- x[x < lower_bound | x > upper_bound]
+  
+  c(
+    Z_Score_Above_2 = sum(z_scores > 2),  # Z-scores greater than 2
+    Z_Score_Below_2 = sum(z_scores < -2),  # Z-scores less than -2
+    Percentiles = paste(round(percentiles, 2), collapse = ", "),  # Concatenate percentiles
+    Outliers_Count = length(outliers) 
+  )
+}
+variables <- c("age", "bmi", "blood_glucose_level", "HbA1c_level")
+position_table <- sapply(variables, function(var) {
+  measures_position(data[[var]])
+})
+position_table <- as.data.frame(t(position_table))
+print(position_table)
+
+# 5- normality part
+data_long <- data %>%
+  select(age, bmi, HbA1c_level, blood_glucose_level) %>%
+  gather(key = "Variable", value = "Value")
+
+# Q-Q Plot for all variables combined
+ggplot(data_long, aes(sample = Value)) +
+  stat_qq(size = 0.5) +
+  stat_qq_line(color = "red", linewidth = 0.5) +
+  facet_wrap(~ Variable, scales = "free") + 
+  labs(title = "Q-Q Plots for Key Variables", x = "Theoretical Quantiles", y = "Sample Quantiles") +
+  theme_minimal()
+
+
+#shapiro wilk tests
+set.seed(123)
+shapiro.test(sample(data$bmi, 5000))
+shapiro.test(sample(data$HbA1c_level, 5000))
+shapiro.test(sample(data$blood_glucose_level, 5000))
+shapiro.test(sample(data$age, 5000))
+
+#central limit theorem
+shapiro.test(sample_means) 
+
+set.seed(123)
+sample_num <- 1000
+sample_size <- 100
+
+get_sample_means <- function(var) {
+    replicate(sample_num, {
+      mean(sample(data[[var]], sample_size, replace = TRUE))
+})
+}
+
+variables <- c("age", "bmi", "blood_glucose_level", "HbA1c_level")
+sample_means <- lapply(variables, get_sample_means)
+names(sample_means) <- variables
+
+plot_data <- data.frame(
+  variable = rep(variables, each = sample_num),
+  mean = unlist(sample_means)
+)
+
+ggplot(plot_data, aes(x = mean)) +
+  geom_histogram(aes(y = after_stat(density)),
+                 bins = 40,
+                 fill = "lightblue",
+                 color = "white") +
+  geom_density(color = "red", linewidth = 1) +
+  facet_wrap(~ variable, scales = "free", nrow = 2) +
+  labs(title = "Central Limit Theorem",
+       subtitle = paste("Sampling distribution of means (n =", sample_size, ")"),
+       x = "Sample Mean",
+       y = "Density") +
+  theme_minimal()
+
+
+shapiro.test(sample_means[["age"]])
+shapiro.test(sample_means[["bmi"]])
+shapiro.test(sample_means[["blood_glucose_level"]])
+shapiro.test(sample_means[["HbA1c_level"]])
+
+# part 6
+#confidence intervals
+t.test(age ~ diabetes, data=data)
+t.test(bmi ~ diabetes, data=data)
+t.test(blood_glucose_level ~ diabetes, data=data)
+t.test(HbA1c_level ~ diabetes, data =data)
+
+#part 8 testing differences
+library(effectsize)
+t.test(age ~ diabetes, data = data)
+cohens_d(age ~ diabetes, data = data)
+t.test(bmi ~ diabetes, data = data)
+cohens_d(bmi ~ diabetes, data = data)
+t.test(blood_glucose_level ~ diabetes, data = data)
+cohens_d(blood_glucose_level ~ diabetes, data = data)
+t.test(HbA1c_level ~ diabetes, data = data)
+cohens_d(HbA1c_level ~ diabetes, data = data)
+
+
+hypertension_diabetic <- sum(data$hypertension[data$diabetes == 1] == 1)
+hypertension_non_diabetic <- sum(data$hypertension[data$diabetes == 0] == 1)
+total_diabetic <- sum(data$diabetes == 1)
+total_non_diabetic <- sum(data$diabetes == 0)
+prop.test(c(hypertension_diabetic, hypertension_non_diabetic), c(total_diabetic, total_non_diabetic))
+
+
+var_test_age <- var.test(age ~ diabetes, data = data)
+print(var_test_age)
+var_test_bmi <- var.test(bmi ~ diabetes, data = data)
+print(var_test_bmi)
+var_test_blood_glucose <- var.test(blood_glucose_level ~ diabetes, data = data)
+print(var_test)
+var_test_hba1c <- var.test(HbA1c_level ~ diabetes, data = data)
+print(var_test_hba1c)
+
+
+
+#goodness of fit 
+observed <- table(data$diabetes)
+expected <- rep(sum(observed) / 2, 2)
+chisq.test(observed, p = c(0.5, 0.5))
+
+#testing independance between hypertension and diabetes
+table_diabetes_hypertension <- table(data$diabetes, data$hypertension)
+print(table_diabetes_hypertension)
+chi_test <- chisq.test(table_diabetes_hypertension)
+print(chi_test)
+library(vcd)
+cramer_v <- assocstats(table_diabetes_hypertension)$cramer
+print(cramer_v)
+
+# Testing independence between gender and diabetes
+table_gender_diabetes <- table(data$gender, data$diabetes)
+print(table_gender_diabetes)
+chi_test <- chisq.test(table_gender_diabetes)
+print(chi_test)
+library(vcd)
+cramer_v <- assocstats(table_gender_diabetes)$cramer
+print(cramer_v)
+
+
+#test for homogeniety 
+table_diabetes_hypertension <- table(data$diabetes, data$hypertension)
+print(table_diabetes_hypertension)
+chi_test_diabetes_hypertension <- chisq.test(table_diabetes_hypertension)
+print(chi_test_diabetes_hypertension)
+cramer_v_diabetes_hypertension <- assocstats(table_diabetes_hypertension)$cramer
+print(cramer_v_diabetes_hypertension)
+
+
+table_diabetes_heart_disease <- table(data$diabetes, data$heart_disease)
+print(table_diabetes_heart_disease)
+chi_test_diabetes_heart_disease <- chisq.test(table_diabetes_heart_disease)
+print(chi_test_diabetes_heart_disease)
+library(vcd)
+cramer_v_diabetes_heart_disease <- assocstats(table_diabetes_heart_disease)$cramer
+print(cramer_v_diabetes_heart_disease)
+
+
+#test for normality
+ks_test <- ks.test(data$age, "pnorm", mean(data$age), sd(data$age))
+print(ks_test)
+ks_test <- ks.test(data$bmi, "pnorm", mean(data$age), sd(data$age))
+print(ks_test)
+ks_test <- ks.test(data$blood_glucose_level, "pnorm", mean(data$age), sd(data$age))
+print(ks_test)
+ks_test <- ks.test(data$HbA1c_level, "pnorm", mean(data$age), sd(data$age))
+print(ks_test)
+
+# part 9 - correlation and regression 
+library(dplyr)
+data$diabetes_numeric <- as.numeric(data$diabetes)
+
+correlation_data <- data %>% 
+  select(age, bmi, HbA1c_level, blood_glucose_level, diabetes_numeric)
+
+correlation <- cor(correlation_data, method = "pearson", use = "complete.obs")
+print(correlation)
+
+cor_age_diabetes <- cor.test(data$age, data$diabetes_numeric)
+cor_bmi_diabetes <- cor.test(data$bmi, data$diabetes_numeric)
+cor_hba1c_diabetes <- cor.test(data$HbA1c_level, data$diabetes_numeric)
+cor_glucose_diabetes <- cor.test(data$blood_glucose_level, data$diabetes_numeric)
+print(cor_age_diabetes)
+print(cor_bmi_diabetes)
+print(cor_hba1c_diabetes)
+print(cor_glucose_diabetes)
+
+
+# logistic regression model
+model_age <- glm(diabetes ~ age, data = data, family = "binomial")
+model_bmi <- glm(diabetes ~ bmi, data = data, family = "binomial")
+model_hba1c_levels <- glm(diabetes ~ HbA1c_level, data = data, family = "binomial")
+model_blood_glucose <- glm(diabetes ~ blood_glucose_level, data = data, family = "binomial")
+summary(model_age)
+summary(model_bmi)
+summary(model_hba1c_levels)
+summary(model_blood_glucose)
+
+data$predicted_prob_age <- predict(model_age, type = "response")
+data$predicted_prob_bmi <- predict(model_bmi, type = "response")
+data$predicted_prob_hba1c <- predict(model_hba1c_levels, type = "response")
+data$predicted_prob_blood_glucose <- predict(model_blood_glucose, type = "response")
+
+ggplot(data, aes(x = age, y = diabetes)) +
+  geom_point(alpha = 0.5, color = "blue") +
+  geom_line(aes(y = predicted_prob_age), color = "red", size = 1) +
+  labs(title = "Logistic Regression: Age vs Diabetes", x = "age", y = "Probability of Diabetes") +
+  theme_minimal()
+ggplot(data, aes(x = bmi, y = diabetes)) +
+  geom_point(alpha = 0.5, color = "blue") +
+  geom_line(aes(y = predicted_prob_bmi), color = "red", size = 1) +
+  labs(title = "Logistic Regression: BMI vs Diabetes", x = "BMI", y = "Probability of Diabetes") +
+  theme_minimal()
+ggplot(data, aes(x = blood_glucose_level, y = diabetes)) +
+  geom_point(alpha = 0.5, color = "blue") +
+  geom_line(aes(y = predicted_prob_blood_glucose), color = "red", size = 1) +
+  labs(title = "Logistic Regression: Blood glucose levels vs Diabetes", x = "Blood Glocose levels", y = "Probability of Diabetes") +
+  theme_minimal()
+ggplot(data, aes(x = HbA1c_level, y = diabetes)) +
+  geom_point(alpha = 0.5, color = "blue") +
+  geom_line(aes(y = predicted_prob_hba1c), color = "red", size = 1) +
+  labs(title = "Logistic Regression: HbA1c levels vs Diabetes", x = "HbA1c levels", y = "Probability of Diabetes") +
+  theme_minimal()
+
+# R squared , adjusted R squared
+model_age <- glm(diabetes ~ age, data = data, family = "binomial")
+model_bmi <- glm(diabetes ~ bmi, data = data, family = "binomial")
+model_hba1c_levels <- glm(diabetes ~ HbA1c_level, data = data, family = "binomial")
+model_blood_glucose <- glm(diabetes ~ blood_glucose_level, data = data, family = "binomial")
+
+pseudo_r2_age <- pR2(model_age)
+pseudo_r2_bmi <- pR2(model_bmi)
+pseudo_r2_hba1c <- pR2(model_hba1c_levels)
+pseudo_r2_glucose <- pR2(model_blood_glucose)
+
+print(pseudo_r2_age)
+print(pseudo_r2_bmi)
+print(pseudo_r2_hba1c)
+print(pseudo_r2_glucose)
+
+# residual plots 
+model <- glm(diabetes ~ age + bmi + blood_glucose_level + HbA1c_level , data = data, family = binomial(link = "logit"))
+deviance_residuals <- residuals(model, type = "deviance")
+pearson_residuals <- residuals(model, type = "pearson")
+
+plot(data$age, deviance_residuals, ylab = "Deviance Residuals", xlab = "Age")
+abline(h = 0, lty = 2, col = "red")
+
+plot(data$bmi, deviance_residuals, ylab = "Deviance Residuals", xlab = "BMI")
+abline(h = 0, lty = 2, col = "red")
+
+plot(data$blood_glucose_level, deviance_residuals, ylab = "Deviance Residuals", xlab = "Blood glucose levels")
+abline(h = 0, lty = 2, col = "red")
+
+plot(data$HbA1c_level, deviance_residuals, ylab = "Deviance Residuals", xlab = "HbA1c levels")
+abline(h = 0, lty = 2, col = "red")
+
+# predicted possibilities
+model <- glm(diabetes ~ age + bmi + blood_glucose_level + HbA1c_level, data = data, family = binomial)
+plot_predictor <- function(var_name, data, model) {
+  var_seq <- seq(min(data[[var_name]]), max(data[[var_name]]), length.out = 1000)
+  
+  new_data <- data.frame(
+    age = rep(median(data$age), 1000),
+    bmi = rep(median(data$bmi), 1000),
+    blood_glucose_level = rep(median(data$blood_glucose_level), 1000),
+    HbA1c_level = rep(median(data$HbA1c_level), 1000)
+  )
+  new_data[[var_name]] <- var_seq
+  preds <- predict(model, newdata = new_data, type = "response", se.fit = TRUE)
+  fit <- preds$fit
+  se <- preds$se.fit
+  lower <- fit - 1.96 * se
+  upper <- fit + 1.96 * se
+  
+    plot(var_seq, fit, type = "l", lwd = 2, ylim = c(0, 1),
+       xlab = paste(var_name, "(range:", round(min(var_seq), 1), "-", round(max(var_seq), 1), ")"),
+       ylab = "Predicted Probability of Diabetes")
+  lines(var_seq, lower, col = "red", lty = 2)
+  lines(var_seq, upper, col = "red", lty = 2)
+  legend("topleft", legend = c("Prediction", "95% CI"), col = c("black", "red"), lty = c(1, 2), bty = "n")
+}
+plot_predictor("age", data, model)
+plot_predictor("bmi", data, model)
+plot_predictor("blood_glucose_level", data, model)
+plot_predictor("HbA1c_level", data, model)
+
+#part 10 - other chisquared tests
+library(effectsize)
+
+t.test(age ~ diabetes, data = data)
+cohens_d(age ~ diabetes, data = data)
+t.test(bmi ~ diabetes, data = data)
+cohens_d(bmi ~ diabetes, data = data)
+t.test(blood_glucose_level ~ diabetes, data = data)
+cohens_d(blood_glucose_level ~ diabetes, data = data)
+t.test(HbA1c_level ~ diabetes, data = data)
+cohens_d(HbA1c_level ~ diabetes, data = data)
+
+hypertension_diabetic <- sum(data$hypertension[data$diabetes == 1] == 1)
+hypertension_non_diabetic <- sum(data$hypertension[data$diabetes == 0] == 1)
+total_diabetic <- sum(data$diabetes == 1)
+total_non_diabetic <- sum(data$diabetes == 0)
+prop.test(c(hypertension_diabetic, hypertension_non_diabetic), c(total_diabetic, total_non_diabetic))
+
+var_test <- var.test(age ~ diabetes, data = data)
+print(var_test)
+var_test <- var.test(bmi ~ diabetes, data = data)
+print(var_test)
+var_test <- var.test(blood_glucose_level ~ diabetes, data = data)
+print(var_test)
+var_test <- var.test(HbA1c_level ~ diabetes, data = data)
+print(var_test)
+
+#goodness of fit 
+observed <- table(data$diabetes)
+expected <- rep(sum(observed) / 2, 2)
+chisq.test(observed, p = c(0.5, 0.5))
+
+#testing independance between hypertension and diabetes
+table_diabetes_hypertension <- table(data$diabetes, data$hypertension)
+print(table_diabetes_hypertension)
+chi_test <- chisq.test(table_diabetes_hypertension)
+print(chi_test)
+library(vcd)
+cramer_v <- assocstats(table_diabetes_hypertension)$cramer
+print(cramer_v)
+
+# Testing independence between gender and diabetes
+table_gender_diabetes <- table(data$gender, data$diabetes)
+print(table_gender_diabetes)
+chi_test <- chisq.test(table_gender_diabetes)
+print(chi_test)
+library(vcd)
+cramer_v <- assocstats(table_gender_diabetes)$cramer
+print(cramer_v)
+
+#test for homogeniety 
+table_diabetes_hypertension <- table(data$diabetes, data$hypertension)
+print(table_diabetes_hypertension)
+chi_test_diabetes_hypertension <- chisq.test(table_diabetes_hypertension)
+print(chi_test_diabetes_hypertension)
+cramer_v_diabetes_hypertension <- assocstats(table_diabetes_hypertension)$cramer
+print(cramer_v_diabetes_hypertension)
+
+table_diabetes_heart_disease <- table(data$diabetes, data$heart_disease)
+print(table_diabetes_heart_disease)
+chi_test_diabetes_heart_disease <- chisq.test(table_diabetes_heart_disease)
+print(chi_test_diabetes_heart_disease)
+library(vcd)
+cramer_v_diabetes_heart_disease <- assocstats(table_diabetes_heart_disease)$cramer
+print(cramer_v_diabetes_heart_disease)
+
+#test for normality
+ks_test <- ks.test(data$age, "pnorm", mean(data$age), sd(data$age))
+print(ks_test)
+ks_test <- ks.test(data$bmi, "pnorm", mean(data$age), sd(data$age))
+print(ks_test)
+ks_test <- ks.test(data$blood_glucose_level, "pnorm", mean(data$age), sd(data$age))
+print(ks_test)
+ks_test <- ks.test(data$HbA1c_level, "pnorm", mean(data$age), sd(data$age))
+print(ks_test)
+
+
+# part 12 non parametric tests
+#wilcoxon test
+library(rstatix) 
+df$diabetes <- as.factor(df$diabetes)
+results <- data.frame(
+  Variable     = character(0),
+  W_statistic  = numeric(0),
+  p_value      = numeric(0),
+  Effect_Size  = numeric(0), 
+  stringsAsFactors = FALSE
+)
+variables <- c("age", "bmi", "HbA1c_level", "blood_glucose_level")
+for (var in variables) {
+  wt <- wilcox.test(df[[var]] ~ df$diabetes, exact = FALSE, correct = FALSE)
+    effect_size <- wilcox_effsize(df, formula = as.formula(paste(var, "~ diabetes")))
+    results <- rbind(results, data.frame(
+    Variable     = var,
+    W_statistic  = round(wt$statistic, 3),
+    p_value      = round(wt$p.value, 4),
+    Effect_Size  = round(effect_size$effsize, 3) 
+  ))
+}
+results <- results[order(-results$Effect_Size), ]
+print(results, row.names = FALSE)
+
+#spearman rank test
+df$diabetes <- as.numeric(as.character(df$diabetes))
+results <- data.frame(
+  Variable = character(),
+  Rho      = numeric(),
+  p_value  = numeric(),
+  stringsAsFactors = FALSE
+)
+variables <- c("age", "bmi", "HbA1c_level", "blood_glucose_level")
+for (var in variables) {
+  test <- cor.test(
+    df[[var]],
+    df$diabetes,
+    method = "spearman",
+    exact  = FALSE
+  )
+  results <- bind_rows(results, 
+    tibble(
+      Variable = var,
+      Rho       = round(as.numeric(test$estimate), 3),
+      p_value   = test$p.value    # keep the raw p-value
+    )
+  )
+}
+results <- results %>%
+  mutate(
+    p_value = format.pval(p_value, 
+                          eps = .Machine$double.eps, 
+                          digits = 3, 
+                          scientific = TRUE)
+  )
+results <- results %>%
+  mutate(AbsRho = abs(Rho)) %>%
+  arrange(desc(AbsRho)) %>%
+  select(-AbsRho)
+print(results, row.names = FALSE)
+
+#HYPOTHESIS 1:
+model_hba1c <- glm(diabetes ~ HbA1c_level, data = data, family = binomial(link = "logit"))
+summary(model_hba1c)
+conf_int_hba1c <- confint(model_hba1c)
+print(conf_int_hba1c)
+z_value_hba1c <- coef_hba1c["HbA1c_level", "z value"]
+p_value_hba1c <- coef_hba1c["HbA1c_level", "Pr(>|z|)"]
+
+cat("Z-Value for HbA1c:", z_value_hba1c, "\n")
+cat("P-Value for HbA1c:", p_value_hba1c, "\n")
+
+#Decision based on P-value
+if (p_value_hba1c < 0.05) {
+  cat("Reject H0: HbA1c level has a significant effect on diabetes.\n")
+} else {
+  cat("Fail to Reject H0: HbA1c level does not have a significant effect on diabetes.\n")
+}
+
+#HYPOTHESIS 2
+#Logistic Regression for Age and Diabetes
+model_age <- glm(diabetes ~ age, data = data, family = binomial(link = "logit"))
+summary(model_age)
+
+#Confidence interval method
+conf_int_age <- confint(model_age)["age", ]
+cat("95% Confidence Interval for Age:", conf_int_age, "\n")
+if (conf_int_age[1] > 0 || conf_int_age[2] < 0) {
+  cat("Reject H0: Age has a significant effect on diabetes.\n")
+} else {
+  cat("Fail to Reject H0: Age does not have a significant effect on diabetes.\n")
+}
+
+#Traditional method: Z-Test
+z_value_age <- coef(summary(model_age))["age", "z value"]
+cat("Z-Value for Age:", z_value_age, "\n")
+if (abs(z_value_age) > 1.96) {
+  cat("Reject H0: Age has a significant effect on diabetes.\n")
+} else {
+  cat("Fail to Reject H0: Age does not have a significant effect on diabetes.\n")
+}
+
+#P-value method
+p_value_age <- coef(summary(model_age))["age", "Pr(>|z|)"]
+cat("P-Value for Age:", p_value_age, "\n")
+if (p_value_age < 0.05) {
+  cat("Reject H0: Age has a significant effect on diabetes.\n")
+} else {
+  cat("Fail to Reject H0: Age does not have a significant effect on diabetes.\n")
+}
+
+#HYPOTHESIS 3 
+#Logistic Regression for BMI and Diabetes
+model_bmi <- glm(diabetes ~ bmi, data = data, family = binomial(link = "logit"))
+summary(model_bmi)
+
+#Confidence interval method
+conf_int_bmi <- confint(model_bmi)["bmi", ]
+cat("95% Confidence Interval for BMI:", conf_int_bmi, "\n")
+if (conf_int_bmi[1] > 0 || conf_int_bmi[2] < 0) {
+  cat("Reject H0: BMI has a significant effect on diabetes.\n")
+} else {
+  cat("Fail to Reject H0: BMI does not have a significant effect on diabetes.\n")
+}
+
+#Traditional method: Z-Test
+z_value_bmi <- coef(summary(model_bmi))["bmi", "z value"]
+cat("Z-Value for BMI:", z_value_bmi, "\n")
+if (abs(z_value_bmi) > 1.96) {
+  cat("Reject H0: BMI has a significant effect on diabetes.\n")
+} else {
+  cat("Fail to Reject H0: BMI does not have a significant effect on diabetes.\n")
+}
+
+#P-value method
+p_value_bmi <- coef(summary(model_bmi))["bmi", "Pr(>|z|)"]
+cat("P-Value for BMI:", p_value_bmi, "\n")
+if (p_value_bmi < 0.05) {
+  cat("Reject H0: BMI has a significant effect on diabetes.\n")
+} else {
+  cat("Fail to Reject H0: BMI does not have a significant effect on diabetes.\n")
+}
+
+#HYPOTHESIS 4
+#Logistic Regression for Glucose Level and Diabetes
+model_glucose <- glm(diabetes ~ blood_glucose_level, data = data, family = binomial(link = "logit"))
+summary(model_glucose)
+
+#Confidence interval method
+conf_int_glucose <- confint(model_glucose)["blood_glucose_level", ]
+cat("95% Confidence Interval for Glucose Level:", conf_int_glucose, "\n")
+if (conf_int_glucose[1] > 0 || conf_int_glucose[2] < 0) {
+  cat("Reject H0: Glucose level has a significant effect on diabetes.\n")
+} else {
+  cat("Fail to Reject H0: Glucose level does not have a significant effect on diabetes.\n")
+}
+
+#Traditional method: Z-Test
+z_value_glucose <- coef(summary(model_glucose))["blood_glucose_level", "z value"]
+cat("Z-Value for Glucose Level:", z_value_glucose, "\n")
+if (abs(z_value_glucose) > 1.96) {
+  cat("Reject H0: Glucose level has a significant effect on diabetes.\n")
+} else {
+  cat("Fail to Reject H0: Glucose level does not have a significant effect on diabetes.\n")
+}
+
+#P-value method
+p_value_glucose <- coef(summary(model_glucose))["blood_glucose_level", "Pr(>|z|)"]
+cat("P-Value for Glucose Level:", p_value_glucose, "\n")
+if (p_value_glucose < 0.05) {
+  cat("Reject H0: Glucose level has a significant effect on diabetes.\n")
+} else {
+  cat("Fail to Reject H0: Glucose level does not have a significant effect on diabetes.\n")
+}
+predicted_prob <- predict(model_hba1c, type = "response")
+plot(data$HbA1c_level, predicted_prob, 
+     xlab = "HbA1c Level", ylab = "Predicted probability of diabetes",
+     main = "Predicted Probability of Diabetes vs HbA1c Level")
+
+predicted_prob_age <- predict(model_age, type = "response")
+plot(data$age, predicted_prob_age, 
+     xlab = "Age", ylab = "Predicted probability of diabetes",
+     main = "Predicted probability of Diabetes vs Age")
+
+predicted_prob_bmi <- predict(model_bmi, type = "response")
+plot(data$bmi, predicted_prob_bmi, 
+     xlab = "BMI", ylab = "Predicted probability of diabetes",
+     main = "Predicted Probability of Diabetes vs BMI")
+
+predicted_prob_glucose <- predict(model_glucose, type = "response")
+plot(data$blood_glucose_level, predicted_prob_glucose, 
+     xlab = "Blood Glucose Level", ylab = "Predicted probability of diabetes",
+     main = "Predicted probability of Diabetes vs Glucose Level")
+
+
+#ANALYSIS OF VARIANCE (ANOVA)
+library(dplyr)  
+
+#Performing One-Way ANOVA for each variable
+#age
+anova_age <- aov(age ~ as.factor(diabetes), data = data)
+summary(anova_age)
+
+#BMI
+anova_bmi <- aov(bmi ~ as.factor(diabetes), data = data)
+summary(anova_bmi)
+#HbA1c Level
+anova_hba1c <- aov(HbA1c_level ~ as.factor(diabetes), data = data)
+summary(anova_hba1c)
+#Blood Glucose Level
+anova_glucose <- aov(blood_glucose_level ~ as.factor(diabetes), data = data)
+summary(anova_glucose)
+#Performing Tukey's Test for significant ANOVA results
+tukey_age <- TukeyHSD(anova_age)
+tukey_gl <- TukeyHSD(anova_glucose)
+tukey_hba1c <- TukeyHSD(anova_hba1c)
+tukey_bmi <- TukeyHSD(anova_bmi)
+
+print("Tukey's Test for Age Groups:")
+print(tukey_age)
+print("Tukey's Test for Glucose level Groups:")
+print(tukey_gl)
+print("Tukey's Test for HbA1c Groups:")
+print(tukey_hba1c)
+print("Tukey's Test for BMI Groups:")
+print(tukey_bmi)
+
+#Optional:visualizing Tukey's Test Results
+
+boxplot(age ~ as.factor(diabetes), 
+        data = data, 
+        main = "Boxplot of Age by Diabetes Status",
+        xlab = "Diabetes Status (0 = No, 1 = Yes)", 
+        ylab = "Age",
+        col = c("lightblue", "lightgreen"))
+
+#Tukey's HSD applied if ANOVA is significant.
+tukey_age_sig <- tukey_age$`as.factor(diabetes)` # Extract Tukey results for age
+if (tukey_age_sig[,"p adj"] < 0.05) {
+  text(1.5, max(data$age), "Significant Difference", col = "red") # Add annotation
+}
+#Boxplot for BMI
+boxplot(bmi ~ as.factor(diabetes), 
+        data = data, 
+        main = "Boxplot of BMI by Diabetes Status",
+        xlab = "Diabetes Status (0 = No, 1 = Yes)", 
+        ylab = "BMI",
+        col = c("lightblue", "lightgreen"))
+#Tukey's HSD applied if ANOVA is significant.
+tukey_bmi_sig <- tukey_bmi$`as.factor(diabetes)`
+if (tukey_bmi_sig[,"p adj"] < 0.05) {
+  text(1.5, max(data$bmi), "Significant Difference", col = "red")
+}
+
+#Boxplot for HbA1c Level
+boxplot(HbA1c_level ~ as.factor(diabetes), 
+        data = data, 
+        main = "Boxplot of HbA1c Level by Diabetes Status",
+        xlab = "Diabetes Status (0 = No, 1 = Yes)", 
+        ylab = "HbA1c Level",
+        col = c("lightblue", "lightgreen"))
+
+#Tukey's HSD applied if ANOVA is significant.
+tukey_hba1c_sig <- tukey_hba1c$`as.factor(diabetes)`
+if (tukey_hba1c_sig[,"p adj"] < 0.05) {
+  text(1.5, max(data$HbA1c_level), "Significant Difference", col = "red")
+}
+
+#Boxplot for Blood Glucose Level
+boxplot(blood_glucose_level ~ as.factor(diabetes), 
+        data = data, 
+        main = "Boxplot of Blood Glucose Level by Diabetes Status",
+        xlab = "Diabetes Status (0 = No, 1 = Yes)", 
+        ylab = "Blood Glucose Level",
+        col = c("lightblue", "lightgreen"))
+
+#Tukey's HSD applied if ANOVA is significant.
+tukey_glucose_sig <- tukey_gl$`as.factor(diabetes)`
+if (tukey_glucose_sig[,"p adj"] < 0.05) {
+  text(1.5, max(data$blood_glucose_level), "Significant Difference", col = "red")
+}
+
+#two-way ANOVA
+#categorizing age
+data <- data %>%
+  mutate(
+    age_group = cut(age, breaks = c(0, 30, 60, Inf), labels = c("Young", "Middle-aged", "Old")),
+    BMI_group = cut(bmi, breaks = c(0, 18.5, 25, 30, Inf), labels = c("Underweight", "Normal", "Overweight", "Obese")),
+    diabetes = as.factor(diabetes)  # Make diabetes categorical for ANOVA
+  )
+
+#applying two-way ANOVA with each continuous variable as outcome
+
+#HbA1c ~ diabetes * age_group
+anova_hba1c <- aov(HbA1c_level ~ diabetes * age_group, data = data)
+summary(anova_hba1c)
+tukey_hba1c <- TukeyHSD(anova_hba1c)
+print(tukey_hba1c)
+#Glucose ~ diabetes * age_group
+anova_glucose <- aov(blood_glucose_level ~ diabetes * age_group, data = data)
+summary(anova_glucose)
+tukey_glucose <- TukeyHSD(anova_glucose)
+print(tukey_glucose)
+#BMI ~ diabetes * age_group
+anova_bmi <- aov(bmi ~ diabetes * age_group, data = data)
+summary(anova_bmi)
+tukey_bmi <- TukeyHSD(anova_bmi)
+print(tukey_bmi)
+
+ggplot(data, aes(x = interaction(diabetes, age_group), y = HbA1c_level, fill = age_group)) +
+  geom_boxplot() +
+  labs(title = "HbA1c Level by Diabetes and Age Group", x = "Diabetes * Age Group", y = "HbA1c Level") +
+  theme_minimal()
+
+ggplot(data, aes(x = interaction(diabetes, age_group), y = blood_glucose_level, fill = age_group)) +
+  geom_boxplot() +
+  labs(title = "Blood Glucose Level by Diabetes and Age Group", x = "Diabetes * Age Group", y = "Glucose Level") +
+  theme_minimal()
+
+ggplot(data, aes(x = interaction(diabetes, age_group), y = bmi, fill = age_group)) +
+  geom_boxplot() +
+  labs(title = "BMI by Diabetes and Age Group", x = "Diabetes * Age Group", y = "BMI") +
+  theme_minimal()
+
+
+
+
